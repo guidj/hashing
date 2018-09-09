@@ -1,7 +1,6 @@
 package fpinscala.laziness
 
 trait Stream[+A] {
-
   def foldRight[B](z: => B)(f: (A, => B) => B): B = // The arrow `=>` in front of the argument type `B` means that the function `f` takes its second argument by name and may choose not to evaluate it.
     this match {
       case Cons(h, t) => f(h(), t().foldRight(z)(f)) // If `f` doesn't evaluate its second argument, the recursion never occurs.
@@ -61,10 +60,44 @@ trait Stream[+A] {
     foldRight(false)((a, as) => p(a) || as)
   }
 
-  def headOption: Option[A] = ???
+  def headOption: Option[A] = {
+    lazy val z: Option[A] = None
+    foldRight(z)((a, o) => Option(a).orElse(o))
+  }
 
   // 5.7 map, filter, append, flatmap using foldRight. Part of the exercise is
   // writing your own function signatures.
+  def map[B](f: A => B): Stream[B] = {
+    foldRight(Stream.empty[B]){
+      case (a, as) => Stream.cons(f(a), as)
+    }
+  }
+
+  def filter[B](f: A => Boolean): Stream[A] = {
+    foldRight(Stream.empty[A]){
+      case (a, as) =>
+        if (f(a)) {
+          Stream.cons(a, as)
+        } else {
+          as
+        }
+    }
+  }
+
+//  def append(a: => A): Stream[A] = {
+//    lazy val x = a()
+//    foldRight(Stream.cons(x, Stream.empty[A]))((a, as) => Stream.cons(a, as))
+//  }
+
+  def flatMap[B](f: A => Stream[B]): Stream[B] = {
+    foldRight(Stream.empty[B]){
+      case (a, as) =>
+        f(a).foldRight(as){
+          case (b, bs) =>
+            Stream.cons(b, bs)
+        }
+    }
+  }
 
   def startsWith[B](s: Stream[B]): Boolean = ???
 
@@ -87,7 +120,7 @@ case class Cons[+A](h: () => A, t: () => Stream[A]) extends Stream[A]
 object Stream {
   def cons[A](hd: => A, tl: => Stream[A]): Stream[A] = {
     lazy val head = hd
-    lazy val tail = tl
+    lazy val   tail = tl
     Cons(() => head, () => tail)
   }
 
@@ -101,14 +134,27 @@ object Stream {
 
   def from(n: Int): Stream[Int] = ???
 
+  def optionToStream[A](v: Option[A]): Stream[A] = {
+    v.map(x => Stream.cons(x, Stream.empty[A])).getOrElse(Stream.empty[A])
+  }
+
   def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = ???
 
   def main(args: Array[String]): Unit = {
     val s = Stream(1, 2, 3, 4, 5)
-    println(s)
-    println(s.toList)
-    println(s.take(3).toList)
-    println(s.drop(3).toList)
-    println(s.takeWhile(_ < 3).toList)
+    val ss = Stream(Stream(1, 2, 3), Stream(4, 5, 6), Stream(7, 8, 9))
+    val so = Stream(Option(1), None, Option(2))
+    printf("s.toList: %s\n", s.toList)
+    printf("s.take(3).toList: %s\n", s.take(3).toList)
+    printf("s.drop(3).toList: %s\n", s.drop(3).toList)
+    printf("s.takeWhile(_ < 3).toList: %s\n", s.takeWhile(_ < 3).toList)
+    printf("s.headOption: %s\n", s.headOption)
+    printf("Stream.empty.headOption: %s\n", Stream.empty.headOption)
+    printf("s.map(_ * 2).toList: %s\n", s.map(_ * 2).toList)
+    printf("s.filter(_ mod 2 == 0).toList: %s\n", s.filter(_ % 2 == 0).toList)
+    printf("ss.map(_.toList).toList: %s\n", ss.map(_.toList).toList)
+    printf("ss.flatMap(identity).toList: %s\n", ss.flatMap(identity).toList)
+    printf("so.toList: %s\n", so.toList)
+    printf("so.flatMap(optionToStream).toList: %s\n", so.flatMap(optionToStream).toList)
   }
 }
